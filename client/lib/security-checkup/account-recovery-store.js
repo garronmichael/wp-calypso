@@ -3,6 +3,7 @@
  */
 var debug = require( 'debug' )( 'calypso:lib:security-checkup:account-recovery-store' ),
 	assign = require( 'lodash/object/assign' ),
+	remove = require( 'lodash/array/remove' ),
 	isEmpty = require( 'lodash/lang/isEmpty' );
 
 /**
@@ -16,55 +17,58 @@ var Dispatcher = require( 'dispatcher' ),
 
 var _initialized = false,
 	_loading = false,
-	_phone = {},
-	_email = {};
+	_phone = {
+		isSavingPhone: false,
+		isVerifyingPhone: false,
+		lastNotice: false,
+		data: {}
+	},
+	_emails = {
+		isAddingEmail: false,
+		lastNotice: false,
+		data: {}
+	};
 
 var AccountRecoveryStore = {
-	getEmail: function() {
+	isAddRecoveryEmail: function() {
+		return _emails.isAddingEmail;
+	},
+
+	isVerificationEmailSent: function() {
+		return _emails.isVerificationEmailSent;
+	},
+
+	isVerifyingPhone: function() {
+		return _phone.isVerifyingPhone;
+	},
+
+	getEmails: function() {
 		fetchFromAPIIfNotInitialized();
 
 		return assign( {
-			loading: _loading,
-		}, _email );
+			loading: _loading
+		}, _emails );
 	},
 
 	getPhone: function() {
 		fetchFromAPIIfNotInitialized();
 
 		return assign( {
-			loading: _loading,
+			loading: _loading
 		}, _phone );
+	},
+
+	getEmailsNotice: function() {
+		return _emails.lastNotice;
+	},
+
+	getPhoneNotice: function() {
+		return _phone.lastNotice;
 	}
 };
 
 function emitChange() {
 	AccountRecoveryStore.emit( 'change' );
-}
-
-// initialize blank data
-resetData();
-
-function resetData() {
-	resetEmail();
-	resetPhone();
-}
-
-function updatePhone( phone ) {
-	_phone.data = assign( {}, phone );
-}
-
-function resetPhone() {
-	updatePhone( null );
-}
-
-function updateEmail( email ) {
-	_email.data = {
-		email: email
-	};
-}
-
-function resetEmail() {
-	updateEmail( null );
 }
 
 function fetchFromAPIIfNotInitialized() {
@@ -96,19 +100,44 @@ function fetchFromAPI() {
 
 function handleResponse( data ) {
 	if ( data.phone ) {
-		updatePhone( {
+		_phone.data = {
 			countryCode: data.phone.country_code,
 			countryNumericCode: data.phone.country_numeric_code,
 			number: data.phone.number,
 			numberFull: data.phone.number_full
-		} );
+		};
 	}
 
-	if ( data.email ) {
-		updateEmail( data.email );
+	if ( data.emails ) {
+		_emails.data = data.emails
 	}
 
 	emitChange();
+}
+
+function handleError( error ) {
+	setEmailsNotice( error.message, 'error' );
+	setPhoneNotice( error.message, 'error' );
+	emitChange();
+}
+
+function removeEmail( deletedEmail ) {
+	_emails.data = remove( _emails.data, function( recoveryEamil ) {
+		return recoveryEamil !== deletedEmail;
+	} );
+
+	emitChange();
+}
+
+function setEmailsNotice( message, type ) {
+	_emails.lastNotice = {
+		type: type,
+		message: message
+	};
+}
+
+function resetEmailsNotice() {
+	_emails.lastNotice = false;
 }
 
 function setPhoneNotice( message, type ) {
@@ -118,35 +147,8 @@ function setPhoneNotice( message, type ) {
 	};
 }
 
-function setEmailNotice( message, type ) {
-	_email.lastNotice = {
-		type: type,
-		message: message
-	};
-}
-
-function resetEmailNotice() {
-	_email.lastNotice = false;
-}
-
 function resetPhoneNotice() {
 	_phone.lastNotice = false;
-}
-
-function handleEmailError( error ) {
-	setEmailNotice( error.message, 'error' );
-	emitChange();
-}
-
-function handlePhoneError( error ) {
-	setPhoneNotice( error.message, 'error' );
-	emitChange();
-}
-
-function handleError( error ) {
-	setPhoneNotice( error.message, 'error' );
-	setEmailNotice( error.message, 'error' );
-	emitChange();
 }
 
 AccountRecoveryStore.dispatchToken = Dispatcher.register( function( payload ) {
@@ -154,82 +156,78 @@ AccountRecoveryStore.dispatchToken = Dispatcher.register( function( payload ) {
 	debug( 'action triggered', action.type, payload );
 
 	switch ( action.type ) {
-		case actions.UPDATE_ACCOUNT_RECOVERY_PHONE:
-			updatePhone( action.phone );
+		case actions.ADD_ACCOUNT_RECOVERY_EMAIL:
+			_emails.isAddingEmail = true;
 			emitChange();
 			break;
 
-		case actions.RECEIVE_UPDATED_ACCOUNT_RECOVERY_PHONE:
+		case actions.RECEIVE_ADDED_ACCOUNT_RECOVERY_EMAIL:
+			_emails.isAddingEmail = false;
 			if ( action.error ) {
-				handlePhoneError( action.error );
+				emitChange();
 				break;
-			}
-
-			updatePhone( action.phone );
-			if ( isEmpty( action.previousPhone ) ) {
-				setPhoneNotice( messages.SMS_ADDED );
-			} else {
-				setPhoneNotice( messages.SMS_UPDATED );
-			}
-
-			emitChange();
-			break;
-
-		case actions.DELETE_ACCOUNT_RECOVERY_PHONE:
-			resetPhone();
-			emitChange();
-			break;
-
-		case actions.RECEIVE_DELETED_ACCOUNT_RECOVERY_PHONE:
-			if ( action.error ) {
-				handlePhoneError( action.error );
-				break;
-			}
-
-			resetPhone();
-			setPhoneNotice( messages.SMS_DELETED );
-			emitChange();
-			break;
-
-		case actions.UPDATE_ACCOUNT_RECOVERY_EMAIL:
-			updateEmail( action.email );
-			emitChange();
-			break;
-
-		case actions.RECEIVE_UPDATED_ACCOUNT_RECOVERY_EMAIL:
-			if ( action.error ) {
-				handleEmailError( action.error );
-				break;
-			}
-
-			updateEmail( action.email );
-			if ( ! action.previousEmail ) {
-				setEmailNotice( messages.EMAIL_ADDED );
-			} else {
-				setEmailNotice( messages.EMAIL_UPDATED );
 			}
 
 			emitChange();
 			break;
 
 		case actions.DELETE_ACCOUNT_RECOVERY_EMAIL:
-			resetEmail();
 			emitChange();
 			break;
 
 		case actions.RECEIVE_DELETED_ACCOUNT_RECOVERY_EMAIL:
 			if ( action.error ) {
-				handleEmailError( action.error );
+				emitChange();
 				break;
 			}
 
-			resetEmail();
-			setEmailNotice( messages.EMAIL_DELETED );
+			removeEmail( action.email );
+			emitChange();
+			break;
+		case actions.SAVE_ACCOUNT_RECOVERY_PHONE:
+			_phone.isSavingPhone = true;
 			emitChange();
 			break;
 
-		case actions.DISMISS_ACCOUNT_RECOVERY_EMAIL_NOTICE:
-			resetEmailNotice();
+		case actions.RECEIVE_SAVED_ACCOUNT_RECOVERY_PHONE:
+			_phone.isSavingPhone = false;
+			if ( action.error ) {
+				emitChange();
+				break;
+			}
+
+			emitChange();
+			break;
+
+		case actions.VERIFY_ACCOUNT_RECOVERY_PHONE:
+			_phone.isVerifyingPhone = true;
+			emitChange();
+			break;
+
+		case actions.RECEIVE_VERIFIED_ACCOUNT_RECOVERY_PHONE:
+			_phone.isVerifyingPhone = false;
+			if ( action.error ) {
+				emitChange();
+				break;
+			}
+
+			emitChange();
+			break;
+
+		case actions.DELETE_ACCOUNT_RECOVERY_PHONE:
+			emitChange();
+			break;
+
+		case actions.RECEIVE_DELETED_ACCOUNT_RECOVERY_PHONE:
+			if ( action.error ) {
+				break;
+			}
+
+			emitChange();
+			break;
+
+		case actions.DISMISS_ACCOUNT_RECOVERY_EMAILS_NOTICE:
+			resetEmailsNotice();
 			emitChange();
 			break;
 

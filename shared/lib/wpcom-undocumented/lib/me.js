@@ -235,38 +235,14 @@ UndocumentedMe.prototype.updateNotificationSettings = function( settings, applyT
 
 UndocumentedMe.prototype.getAccountRecovery = function( callback ) {
 	var args = {
-		apiVersion: '1.1',
-		path: '/me/account-recovery'
+		apiVersion: '1.2'
 	};
-
-	return this.wpcom.req.get( args, callback );
+	return this.wpcom.req.get( '/me/account-recovery', args, callback );
 };
 
-UndocumentedMe.prototype.updateAccountRecoveryPhone = function( country, phoneNumber, callback ) {
+UndocumentedMe.prototype.addAccountRecoveryEmail = function( email, callback ) {
 	var args = {
-		apiVersion: '1.1',
-		path: '/me/account-recovery/phone',
-		body: {
-			country: country,
-			phone_number: phoneNumber
-		}
-	};
-
-	return this.wpcom.req.post( args, callback );
-};
-
-UndocumentedMe.prototype.deleteAccountRecoveryPhone = function( callback ) {
-	var args = {
-		apiVersion: '1.1',
-		path: '/me/account-recovery/phone/delete'
-	};
-
-	return this.wpcom.req.post( args, callback );
-};
-
-UndocumentedMe.prototype.updateAccountRecoveryEmail = function( email, callback ) {
-	var args = {
-		apiVersion: '1.1',
+		apiVersion: '1.2',
 		path: '/me/account-recovery/email',
 		body: {
 			email: email
@@ -276,10 +252,47 @@ UndocumentedMe.prototype.updateAccountRecoveryEmail = function( email, callback 
 	return this.wpcom.req.post( args, callback );
 };
 
-UndocumentedMe.prototype.deleteAccountRecoveryEmail = function( callback ) {
+UndocumentedMe.prototype.deleteAccountRecoveryEmail = function( email, callback ) {
 	var args = {
-		apiVersion: '1.1',
-		path: '/me/account-recovery/email/delete'
+		apiVersion: '1.2',
+		path: '/me/account-recovery/email/delete',
+		body: {
+			email: email
+		}
+	};
+
+	return this.wpcom.req.post( args, callback );
+};
+
+UndocumentedMe.prototype.addAccountRecoveryPhone = function( country, phoneNumber, callback ) {
+	var args = {
+		apiVersion: '1.2',
+		path: '/me/account-recovery/phone/new',
+		body: {
+			country: country,
+			phone_number: phoneNumber
+		}
+	};
+
+	return this.wpcom.req.post( args, callback );
+};
+
+UndocumentedMe.prototype.validateAccountRecoveryPhone = function( code, callback ) {
+	var args = {
+		apiVersion: '1.2',
+		path: '/me/account-recovery/phone/validate',
+		body: {
+			code: code
+		}
+	};
+
+	return this.wpcom.req.post( args, callback );
+};
+
+UndocumentedMe.prototype.deleteAccountRecoveryPhone = function( callback ) {
+	var args = {
+		apiVersion: '1.2',
+		path: '/me/account-recovery/phone/delete'
 	};
 
 	return this.wpcom.req.post( args, callback );
