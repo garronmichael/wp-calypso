@@ -1,11 +1,13 @@
-var React = require( 'react' ),
-	SignupActions = require( 'lib/signup/actions' ),
-	MlbThemeThumbnail = require( './mlb-theme-thumbnail' );
+var React = require( 'react' );
 
 /**
  * Internal dependencies
  */
-var StepWrapper = require( 'signup/step-wrapper' );
+var StepWrapper = require( 'signup/step-wrapper' ),
+	analytics = require( 'analytics' ),
+	SignupActions = require( 'lib/signup/actions' ),
+	Theme = require( 'components/theme' ),
+	ThemeHelper = require( 'lib/themes/helpers' );
 
 module.exports = React.createClass( {
 	displayName: 'MlbThemeSelection',
@@ -62,6 +64,31 @@ module.exports = React.createClass( {
 		this.setState( { team: event.target.value } );
 	},
 
+	getThumbnailUrl: function( team, variation ) {
+		var url = 'https://i1.wp.com/s0.wp.com/wp-content/themes/vip/partner-' +
+			team + '-' + ThemeHelper.getSlugFromName( variation ) + '/screenshot.png?w=660';
+		if ( team !== 'mlb' ) {
+			url = 'https://signup.wordpress.com/wp-content/mu-plugins/signup-variants/mlblogs/images/themes/' +
+				ThemeHelper.getSlugFromName( variation ) + '/' + team + '.jpg';
+		}
+		return url;
+	},
+
+	handleSubmit: function( variation ) {
+		var themeSlug;
+
+		themeSlug = 'partner-mlb-' + ThemeHelper.getSlugFromName( variation );
+
+		analytics.tracks.recordEvent( 'calypso_signup_theme_select', { theme: themeSlug, headstart: false } );
+		SignupActions.submitSignupStep( {
+			stepName: this.props.stepName,
+			processingMessage: this.translate( 'Adding your theme' ),
+			themeSlug
+		} );
+
+		this.props.goToNextStep();
+	},
+
 	renderThemes: function() {
 		return (
 			<div>
@@ -77,19 +104,21 @@ module.exports = React.createClass( {
 					</fieldset>
 				</div>
 				<h3>{ this.translate( 'Theme' ) }</h3>
-				<div>
+				<div className="mlb-theme-selection">
 					{ this.props.variations.map( function( variation ) {
 						return (
-							<MlbThemeThumbnail
+							<Theme
+								id = { 'partner-' + this.state.team + '-' + ThemeHelper.getSlugFromName( variation ) }
 								key={ variation }
-								variation={ variation }
-								team={ this.state.team }
-								{ ...this.props } />
+								name={ variation }
+								screenshot={ this.getThumbnailUrl( this.state.team, variation ) }
+								onScreenshotClick = { this.handleSubmit.bind( null, variation ) }
+							/>
 						);
 					}.bind( this ) ) }
 				</div>
 				<div className="mlb-themes__terms">
-					<h2>{ this.translate( 'MLB.com/blogs Rules') } </h2>
+					<h2>{ this.translate( 'MLB.com/blogs Rules' ) } </h2>
 					<p>
 						{ this.translate( 'By selecting a theme or clicking Skip, you understand that activating an MLB.com/blogs account indicates your acceptance of the {{a}}Terms of Use{{/a}}', {
 							components: {
