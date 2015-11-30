@@ -40,6 +40,8 @@ import PluginsDataStore from 'lib/plugins/wporg-data/store'
 import PluginNotices from 'lib/plugins/notices'
 import JetpackManageErrorPage from 'my-sites/jetpack-manage-error-page'
 import PlanNudge from 'components/plans/plan-nudge'
+import SectionHeader from 'components/section-header'
+import SectionHeaderButton from 'components/section-header/button'
 
 /**
  * Module variables
@@ -126,11 +128,11 @@ export default React.createClass( {
 		} );
 	},
 
-	jetpackPlugins() {
+	getJetpackPlugins() {
 		return reject( this.state.plugins, property( 'wpcom' ) );
 	},
 
-	wpcomPlugins() {
+	getWpcomPlugins() {
 		return filter( this.state.plugins, property( 'wpcom' ) );
 	},
 
@@ -212,7 +214,7 @@ export default React.createClass( {
 		}
 	},
 
-	pluginChecked( plugin ) {
+	togglePluginSelection( plugin ) {
 		PluginsActions.togglePluginSelection( plugin );
 		analytics.ga.recordEvent( 'Plugins', 'Clicked to ' + plugin.selected ? 'Deselect' : 'Select' + 'Single Plugin', 'Plugin Name', plugin.slug );
 	},
@@ -251,7 +253,7 @@ export default React.createClass( {
 		this.recordEvent( 'Clicked Deactivate Plugin(s)', true );
 	},
 
-	deactiveAndDisconnectSelected: function() {
+	deactiveAndDisconnectSelected() {
 		var waitForDeactivate = false;
 
 		this.doActionOverSelected( 'deactivating', ( site, plugin ) => {
@@ -395,7 +397,7 @@ export default React.createClass( {
 		return [ ... Array( placeholderCount ).keys() ].map( i => <PluginItem key={ 'placeholder-' + i } /> );
 	},
 
-	formatPlugins( plugins ) {
+	formatPlugins( plugins, disableManage ) {
 		const manageableSites = this.props.sites.getSelectedOrAllJetpackCanManage();
 
 		return plugins.map( plugin => {
@@ -407,8 +409,8 @@ export default React.createClass( {
 					plugin={ plugin }
 					sites={ plugin.sites }
 					isSelected={ plugin.selected }
-					isSelectable={ this.state.bulkManagement }
-					onClick={ this.pluginChecked.bind( this, plugin ) }
+					isSelectable={ this.state.bulkManagement && ! disableManage }
+					onClick={ this.togglePluginSelection.bind( this, plugin ) }
 					pluginLink={ this.props.path + '/' + encodeURIComponent( plugin.slug ) + ( plugin.wpcom ? '/business' : '' ) + this.siteSuffix() }
 					progress={ this.state.notices.inProgress.filter( log => log.plugin.slug === plugin.slug ) }
 					errors={
@@ -420,7 +422,7 @@ export default React.createClass( {
 		} );
 	},
 
-	pluginList( plugins, header ) {
+	renderPluginList( plugins, header, disableManage ) {
 		let headerMarkup;
 
 		if ( isEmpty( plugins ) ) {
@@ -428,18 +430,19 @@ export default React.createClass( {
 		}
 
 		const itemListClasses = classNames( 'list-cards-compact', 'plugins__list', {
-			'is-bulk-editing': this.state.bulkManagement
+			'is-bulk-editing': this.state.bulkManagement && ! disableManage
 		} );
 
-		if ( this.props.sites.getSelectedOrAllWithPlugins().length > 1 ) {
-			// only show the headers in the All Sites view
-			headerMarkup = <div className='plugins__list-header'>{ header }</div>;
-		}
+		headerMarkup = (
+			<SectionHeader label={ header }>
+				{ disableManage ? null : this.getCurrentActionButtons() }
+			</SectionHeader>
+		);
 
 		return (
 			<span>
 				{ headerMarkup }
-				<div className={ itemListClasses }>{ this.formatPlugins( plugins ) }</div>
+				<div className={ itemListClasses }>{ this.formatPlugins( plugins, disableManage ) }</div>
 			</span>
 		);
 	},
@@ -501,59 +504,45 @@ export default React.createClass( {
 			.some( plugin => plugin.sites.some( site => site.canUpdateFiles ) );
 	},
 
-	renderBulkAutupdateActionGroup() {
-		return (
-			<div className="toolbar-bulk__action-group">
-				<a onClick={ this.setAutoupdateSelected }>{ this.translate( 'Autoupdate' ) }</a>
-				<a className="toolbar-bulk__more-actions noticon noticon-expand">
-					<span className="screen-reader-text">{ this.translate( 'More options' ) }</span>
-				</a>
-				<div className="toolbar-bulk__more-actions">
-					<a onClick={ this.unsetAutoupdateSelected }>{ this.translate( 'Manually update' ) }</a>
-				</div>
-			</div>
-		);
-	},
+	getCurrentActionButtons() {
+		let buttons = [];
+		const hasWpcomPlugins = this.getSelected().some( property( 'wpcom' ) );
+		const isJetpackSelected = this.state.plugins.some( plugin => plugin.selected && 'jetpack' === plugin.slug );
 
-	toolbarBulkAction() {
-		const hasWpcomPlugins = this.getSelected().some( property( 'wpcom' ) ),
-			bulkActionOptionsClasses = classNames( {
-				'toolbar-bulk__action-options': true,
-				hidden: ! this.areSelected()
-			} ),
-			isJetpackSelected = this.state.plugins.some( plugin => plugin.selected && 'jetpack' === plugin.slug ),
-			sitesCanUpdateFiles = this.canUpdatePlugins(),
-			needsUpdateLink = ! hasWpcomPlugins && sitesCanUpdateFiles && this.areSelected( 'updates' ),
-			needsRemoveLink = ! hasWpcomPlugins && sitesCanUpdateFiles && config.isEnabled( 'manage/plugins/browser' ) && ! isJetpackSelected,
-			needsAutoUpdates = ! hasWpcomPlugins && sitesCanUpdateFiles && this.areSelected(),
-			needsActivateLink = this.areSelected( 'inactive' ),
-			needsDeactivateLink = this.areSelected( 'active' ),
-			deactivateLink = isJetpackSelected ?
-				<a onClick={ this.deactiveAndDisconnectSelected }>{ this.translate( 'Disconnect' ) }</a> :
-				<a onClick={ this.deactivateSelected }>{ this.translate( 'Deactivate' ) }</a>;
-
-		return (
-			<div className={ bulkActionOptionsClasses }>
-				<div className="toolbar-bulk__action-group">
-					{ needsActivateLink && <a onClick={ this.activateSelected }>{ this.translate( 'Activate' ) }</a> }
-					{ needsDeactivateLink && deactivateLink }
-					{ needsRemoveLink && <a onClick={ this.removePluginNotice }>{ this.translate( 'Remove' ) }</a> }
-					{ needsUpdateLink && <a onClick={ this.updateSelected }>{ this.translate( 'Update' ) }</a> }
-				</div>
-				{ needsAutoUpdates && this.renderBulkAutupdateActionGroup() }
-			</div>
-		);
-	},
-
-	toolbarSelect() {
-		if ( this.props.sites.canUpdateFiles() ) {
-			return (
-				<div className="toolbar-bulk__selection-options" role="menu">
-					<a className="toolbar-bulk__selection-item" role="menu-item" onClick={ this.setPluginFilter.bind( this, 'all' ) }>{ this.translate( 'All' ) }</a>
-					<a className="toolbar-bulk__selection-item" role="menu-item" onClick={ this.setPluginFilter.bind( this, 'updates' ) }>{ this.translate( 'Update available' ) }</a>
-				</div>
-			);
+		if ( ! hasWpcomPlugins && this.canUpdatePlugins() && this.areSelected( 'updates' ) ) { // needs updates
+			buttons.push( <SectionHeaderButton onClick={ this.updateSelected }>{ this.translate( 'Update' ) }</SectionHeaderButton> );
 		}
+
+		if ( ! hasWpcomPlugins && this.canUpdatePlugins() && config.isEnabled( 'manage/plugins/browser' ) && ! isJetpackSelected ) {  // needs remove
+			buttons.push( <SectionHeaderButton onClick={ this.removePluginNotice }>{ this.translate( 'Remove' ) }</SectionHeaderButton> );
+		}
+
+		if ( ! hasWpcomPlugins && this.canUpdatePlugins() && this.areSelected() ) { // needs autoupdates
+			buttons.push( <SectionHeaderButton onClick={ this.setAutoupdateSelected }>{ this.translate( 'Autoupdate' ) }</SectionHeaderButton> );
+			buttons.push( <SectionHeaderButton onClick={ this.unsetAutoupdateSelected }>{ this.translate( 'Manually update' ) }</SectionHeaderButton> );
+		}
+
+		if ( this.areSelected( 'inactive' ) ) { // needs activate button
+			buttons.push( <SectionHeaderButton onClick={ this.activateSelected }>{ this.translate( 'Activate' ) }</SectionHeaderButton> )
+		}
+
+		if ( this.areSelected( 'active' ) ) {
+			let deactivateButton = isJetpackSelected
+				? <SectionHeaderButton onClick={ this.deactiveAndDisconnectSelected }>{ this.translate( 'Disconnect' ) }</SectionHeaderButton>
+				: <SectionHeaderButton onClick={ this.deactivateSelected }>{ this.translate( 'Deactivate' ) }</SectionHeaderButton>;
+			buttons.push( deactivateButton )
+		}
+
+		buttons.push(
+			<SectionHeaderButton onClick={ this.toggleBulkManagement } selected={ this.state.bulkManagement }>
+					{
+						this.state.bulkManagement ?
+						this.translate( 'Done', { context: 'button label' } ) :
+						this.translate( 'Bulk Edit', { context: 'button label' } )
+					}
+			</SectionHeaderButton>
+		);
+		return buttons;
 	},
 
 	getEmptyContentUpdateData() {
@@ -633,6 +622,29 @@ export default React.createClass( {
 		return some( this.props.sites.getSelectedOrAllWithPlugins(), site => site && site.jetpack && site.canUpdateFiles );
 	},
 
+	getPluginsContent() {
+		const plugins = this.state.plugins || [];
+
+		if ( isEmpty( plugins ) && ( this.props.search || 'inactive' === this.props.filter || 'updates' === this.props.filter ) ) {
+			let emptyContentData = this.getEmptyContentData();
+			return (
+				<EmptyContent
+					title={ emptyContentData.title }
+					illustration={ emptyContentData.illustration }
+					actionURL={ emptyContentData.actionURL }
+					action={ emptyContentData.action } />
+			);;
+		} else {
+			return (
+				<div className="plugins__lists">
+					{ this.renderPluginList( this.getWpcomPlugins(), this.translate( 'WordPress.com Plugins' ), true ) }
+					{ this.renderPluginList( this.getJetpackPlugins(), this.translate( 'Jetpack Plugins' ) ) }
+					{ ! this.state.plugins && this.placeholders() }
+				</div>
+			);
+		}
+	},
+
 	render() {
 		if ( this.state.accessError ) {
 			return (
@@ -666,77 +678,6 @@ export default React.createClass( {
 			);
 		}
 
-		const plugins = this.state.plugins || [];
-		let pluginsContent, toolbarSelect, toolbarBulkAction, manageLink;
-
-		if ( ! isEmpty( plugins ) ) {
-			toolbarBulkAction = this.toolbarBulkAction();
-			toolbarSelect = this.toolbarSelect();
-			manageLink = (
-				<NavSegmented>
-					<NavItem onClick={ this.toggleBulkManagement } selected={ this.state.bulkManagement }>
-						{
-							this.state.bulkManagement ?
-							this.translate( 'Done', { context: 'button label' } ) :
-							this.translate( 'Manage', { context: 'button label' } )
-						}
-					</NavItem>
-				</NavSegmented>
-			);
-		}
-
-		if ( isEmpty( plugins ) && ( this.props.search || 'inactive' === this.props.filter || 'updates' === this.props.filter ) ) {
-			let emptyContentData = this.getEmptyContentData();
-			pluginsContent = (
-				<EmptyContent
-					title={ emptyContentData.title }
-					illustration={ emptyContentData.illustration }
-					actionURL={ emptyContentData.actionURL }
-					action={ emptyContentData.action }
-				/>
-			);
-		} else {
-			const checkedPluginsCount = this.getSelected().length,
-				bulkActionsClasses = classNames( {
-					'toolbar-bulk__actions': true,
-					'some-selected': checkedPluginsCount > 0,
-					'all-selected': ! isEmpty( plugins ) && checkedPluginsCount === plugins.length
-				} ),
-				manageClasses = classNames( {
-					'toolbar-bulk': true,
-					'is-bulk-editing': this.state.bulkManagement,
-					'is-all-sites': this.props.sites.getSelectedOrAllWithPlugins().length > 1
-				} );
-
-			pluginsContent = (
-				<div className="plugins__lists">
-					<div className={ manageClasses }>
-						<div className={ bulkActionsClasses }>
-							<div className="toolbar-bulk__check-all" role="button">
-								<a onClick={ this.unselectOrSelectAll } className="checkbox-tristate" role="checkbox">
-									<span className="screen-reader-text">{ this.translate( 'Check all' ) }</span>
-								</a>
-								<input className="toolbar-bulk__selection-options-toggle" type="checkbox" id="bulk-selection-options" onChange={ this.changeSelectionOptionsState } checked={ this.state.selectionOptionsOpen } />
-								<label className="toolbar-bulk__selection-options-label noticon noticon-expand" htmlFor="bulk-selection-options">
-									<span className="screen-reader-text">{ this.translate( 'View selection options' ) }</span>
-								</label>
-								{ toolbarSelect }
-							</div>
-							<input className="toolbar-bulk__action-options-toggle" type="checkbox" id="actions-menu-toggle" />
-							<label className="toolbar-bulk__action-options-label" htmlFor="actions-menu-toggle">
-								<span className="screen-reader-text">{ this.translate( 'Select' ) }</span>{ this.translate( 'Actions' ) }
-								<span className="noticon noticon-expand"></span>
-							</label>
-							{ toolbarBulkAction }
-						</div>
-					</div>
-					{ this.pluginList( this.wpcomPlugins(), this.translate( 'WordPress.com Plugins' ) ) }
-					{ this.pluginList( this.jetpackPlugins(), this.translate( 'Jetpack Plugins' ) ) }
-					{ ! this.state.plugins && this.placeholders() }
-				</div>
-			);
-		}
-
 		const containerClass = classNames( {
 			'main-column': true,
 			plugins: true,
@@ -761,8 +702,6 @@ export default React.createClass( {
 						} ) }
 					</NavTabs>
 
-					{ manageLink }
-
 					<Search
 						pinned
 						onSearch={ this.doSearch }
@@ -772,7 +711,7 @@ export default React.createClass( {
 						placeholder={ this.getSearchPlaceholder() }
 					/>
 				</SectionNav>
-				{ pluginsContent }
+				{ this.getPluginsContent() }
 				<DisconnectJetpackDialog ref="dialog" site={ this.props.site } sites={ this.props.sites } redirect="/plugins" />
 			</Main>
 		);
