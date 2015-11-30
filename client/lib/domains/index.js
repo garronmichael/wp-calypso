@@ -134,7 +134,7 @@ function canAddEmail( domains ) {
 }
 
 function getSelectedDomain( { domains, selectedDomainName } ) {
-	return find( domains.list, { name: selectedDomainName } );
+	return domains ? find( domains.list, { name: selectedDomainName } ) : null;
 }
 
 function isRegisteredDomain( domain ) {
