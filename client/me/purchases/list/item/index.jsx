@@ -39,7 +39,7 @@ const PurchaseItem = React.createClass( {
 			);
 		}
 
-		if ( isRenewing( purchase ) ) {
+		if ( isRenewing( purchase ) && purchase.renewMoment ) {
 			return this.translate( 'Renews on %s', {
 				args: purchase.renewMoment.format( 'LL' )
 			} );
